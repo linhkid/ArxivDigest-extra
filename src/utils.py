@@ -133,7 +133,9 @@ def openai_completion(
                         choice["total_tokens"] = completion_batch.usage.total_tokens
                 else:
                     # Use new API format
-                    client = openai.OpenAI()
+                    # Get API key from environment or use the global one
+                    api_key = os.getenv('OPENAI_API_KEY') or getattr(openai, 'api_key', None)
+                    client = openai.OpenAI(api_key=api_key)
                     
                     if is_chat_model:
                         completion_batch = client.chat.completions.create(

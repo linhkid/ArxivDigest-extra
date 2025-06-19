@@ -87,7 +87,7 @@ def analyze_papers_with_claude(
     papers: List[Dict[str, Any]], 
     query: Dict[str, str],
     config: Optional[ClaudeConfig] = None,
-    model_name: str = "claude-3.5-sonnet-20240620",
+    model_name: str = "claude-sonnet-4-20250514",
     api_key: str = None
 ) -> List[Dict[str, Any]]:
     """
@@ -223,7 +223,7 @@ def analyze_papers_with_claude(
             
     return analyzed_papers
 
-def get_claude_interpretability_analysis(paper: Dict[str, Any], model_name: str = "claude-3.5-sonnet-20240620", api_key: str = None) -> Dict[str, Any]:
+def get_claude_interpretability_analysis(paper: Dict[str, Any], model_name: str = "claude-sonnet-4-20250514", api_key: str = None) -> Dict[str, Any]:
     """
     Get specialized mechanistic interpretability analysis for a paper using Claude.
     
@@ -320,3 +320,47 @@ def get_claude_interpretability_analysis(paper: Dict[str, Any], model_name: str 
             
     except Exception as e:
         return {"error": f"Claude API error: {str(e)}"}
+
+def analyze_with_claude_sonnet_4(
+    papers: List[Dict[str, Any]], 
+    query: Dict[str, str],
+    api_key: str = None
+) -> List[Dict[str, Any]]:
+    """
+    Analyze papers using Claude Sonnet 4.
+    
+    Args:
+        papers: List of paper dictionaries
+        query: Dictionary with 'interest' key describing research interests
+        api_key: Anthropic API key
+        
+    Returns:
+        List of papers with added analysis
+    """
+    config = ClaudeConfig(
+        max_tokens=8000,  # Higher token limit for Sonnet 4
+        temperature=0.3   # Slightly lower temperature for more consistency
+    )
+    return analyze_papers_with_claude(papers, query, config, "claude-sonnet-4-20250514", api_key)
+
+def analyze_with_claude_sonnet_3_7(
+    papers: List[Dict[str, Any]], 
+    query: Dict[str, str],
+    api_key: str = None
+) -> List[Dict[str, Any]]:
+    """
+    Analyze papers using Claude Sonnet 3.7.
+    
+    Args:
+        papers: List of paper dictionaries
+        query: Dictionary with 'interest' key describing research interests
+        api_key: Anthropic API key
+        
+    Returns:
+        List of papers with added analysis
+    """
+    config = ClaudeConfig(
+        max_tokens=6000,  # Good token limit for Sonnet 3.7
+        temperature=0.4   # Balanced temperature
+    )
+    return analyze_papers_with_claude(papers, query, config, "claude-sonnet-3-7-20250219", api_key)

@@ -3,8 +3,8 @@
 # For new scripts, use find_design_papers.sh instead
 
 # Show deprecation warning
-echo "⚠️ Warning: get_design_papers.sh is deprecated and will be removed in a future version"
-echo "⚠️ Please use find_design_papers.sh instead, which has more features and better output"
+echo "Warning: get_design_papers.sh is deprecated and will be removed in a future version"
+echo "Please use find_design_papers.sh instead, which has more features and better output"
 echo ""
 
 # Default values

@@ -11,6 +11,13 @@ from paths import DATA_DIR, DIGEST_DIR
 from model_manager import model_manager, ModelProvider
 from gemini_utils import setup_gemini_api, get_topic_clustering
 
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    print("python-dotenv not installed. API keys from .env won't be loaded automatically.")
+
 # Load config file
 def load_config():
     config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml")
@@ -21,7 +28,18 @@ def load_config():
         print(f"Error loading config: {e}")
         return {"threshold": 2}  # Default threshold if config loading fails
 
+def get_api_keys_from_env():
+    """Load API keys from environment variables."""
+    return {
+        'openai': os.getenv('OPENAI_API_KEY', ''),
+        'gemini': os.getenv('GOOGLE_API_KEY', ''),
+        'anthropic': os.getenv('CLAUDE_API_KEY', '')
+    }
+
 config = load_config()
+env_api_keys = get_api_keys_from_env()
+
+# API keys will be auto-registered when the UI loads
 
 # Helper function to filter papers by threshold
 def filter_papers_by_threshold(papers, threshold):
@@ -552,6 +570,10 @@ def sample(email, topic, physics_topic, categories, interest, use_openai, use_ge
     print(f"UI Batch size: {custom_batch_size} papers")
     print(f"Prompt batch size: {custom_prompt_batch_size} papers per prompt")
     print(f"===============================================")
+    
+    # Ensure API keys are registered before processing
+    ensure_api_keys_registered()
+    
     if not topic:
         raise gr.Error("You must choose a topic.")
     if topic == "Physics":
@@ -594,10 +616,10 @@ def sample(email, topic, physics_topic, categories, interest, use_openai, use_ge
         
         if use_openai:
             if not model_manager.is_provider_available(ModelProvider.OPENAI):
-                if not openai.api_key:
+                if not env_api_keys['openai']:
                     raise gr.Error("Set your OpenAI API key in the OpenAI tab first")
                 else:
-                    model_manager.register_openai(openai.api_key)
+                    model_manager.register_openai(env_api_keys['openai'])
             providers.append(ModelProvider.OPENAI)
             model_names[ModelProvider.OPENAI] = openai_model
             
@@ -647,7 +669,7 @@ def sample(email, topic, physics_topic, categories, interest, use_openai, use_ge
                 papers = design_papers
         
         # Process papers directly instead of using model_manager
-        print("\n===== ANALYZING PAPERS FOR EMAIL =====")
+        print("\n===== ANALYZING PAPERS =====")
         print(f"Processing {len(papers)} papers...")
         relevancy = []
         hallucination = False
@@ -675,12 +697,19 @@ def sample(email, topic, physics_topic, categories, interest, use_openai, use_ge
         if use_gemini and model_manager.is_provider_available(ModelProvider.GEMINI) and len(relevancy) == 0:
             try:
                 # Import directly to avoid circular imports
-                from gemini_utils import analyze_papers_with_gemini
-                gemini_papers = analyze_papers_with_gemini(
-                    papers,
-                    query={"interest": interest},
-                    model_name=gemini_model
-                )
+                from gemini_utils import analyze_papers_with_gemini, analyze_with_gemini_2_5_flash_thinking, analyze_with_gemini_2_5_flash_no_thinking, analyze_with_gemini_2_5_pro
+                
+                # Choose the appropriate function based on model selection
+                if gemini_model == "gemini-2.5-flash-thinking":
+                    gemini_papers = analyze_with_gemini_2_5_flash_thinking(papers, query={"interest": interest})
+                elif gemini_model == "gemini-2.5-pro":
+                    gemini_papers = analyze_with_gemini_2_5_pro(papers, query={"interest": interest}, use_thinking=True)
+                else:
+                    gemini_papers = analyze_papers_with_gemini(
+                        papers,
+                        query={"interest": interest},
+                        model_name=gemini_model
+                    )
                 # Process papers to ensure they have the right fields
                 for paper in gemini_papers:
                     if 'gemini_analysis' in paper:
@@ -762,7 +791,10 @@ def sample(email, topic, physics_topic, categories, interest, use_openai, use_ge
             # Get topic clustering from Gemini if available
             if use_gemini and model_manager.is_provider_available(ModelProvider.GEMINI):
                 try:
-                    clusters = get_topic_clustering(relevancy, model_name=gemini_model)
+                    # Enable thinking mode for 2.5 models with thinking support
+                    use_thinking_clustering = gemini_model in ["gemini-2.5-flash-thinking", "gemini-2.5-pro"]
+                    actual_model = gemini_model.replace("-thinking", "") if "-thinking" in gemini_model else gemini_model
+                    clusters = get_topic_clustering(relevancy, model_name=actual_model, use_thinking=use_thinking_clustering)
                     cluster_info = "\n\n=== TOPIC CLUSTERS ===\n"
                     for i, cluster in enumerate(clusters.get("clusters", [])):
                         cluster_info += f"\nCluster {i+1}: {cluster.get('name')}\n"
@@ -896,15 +928,52 @@ def change_physics(subject):
 
 
 def register_openai_token(token):
-    openai.api_key = token
-    model_manager.register_openai(token)
+    if token:  # Only register if token is not empty
+        try:
+            # Update the env_api_keys dict for consistency
+            env_api_keys['openai'] = token
+            model_manager.register_openai(token)
+            print(f"OpenAI API key updated")
+        except Exception as e:
+            print(f"Warning: OpenAI API key registration failed: {e}")
+    else:
+        env_api_keys['openai'] = ''
+        print("OpenAI API key cleared")
     
 def register_gemini_token(token):
-    setup_gemini_api(token)
-    model_manager.register_gemini(token)
+    if token:  # Only register if token is not empty
+        try:
+            setup_gemini_api(token)
+            model_manager.register_gemini(token)
+            print(f"Gemini API key updated")
+        except Exception as e:
+            print(f"Warning: Gemini API key registration failed: {e}")
+    else:
+        print("Gemini API key cleared")
     
 def register_anthropic_token(token):
-    model_manager.register_anthropic(token)
+    if token:  # Only register if token is not empty
+        try:
+            model_manager.register_anthropic(token)
+            print(f"Anthropic API key updated")
+        except Exception as e:
+            print(f"Warning: Anthropic API key registration failed: {e}")
+    else:
+        print("Anthropic API key cleared")
+
+def ensure_api_keys_registered():
+    """Ensure API keys from .env are registered before processing starts."""
+    if env_api_keys['openai'] and not model_manager.is_provider_available(ModelProvider.OPENAI):
+        print("Registering OpenAI API key...")
+        register_openai_token(env_api_keys['openai'])
+    
+    if env_api_keys['gemini'] and not model_manager.is_provider_available(ModelProvider.GEMINI):
+        print("Registering Gemini API key...")
+        register_gemini_token(env_api_keys['gemini'])
+    
+    if env_api_keys['anthropic'] and not model_manager.is_provider_available(ModelProvider.ANTHROPIC):
+        print("Registering Anthropic API key...")
+        register_anthropic_token(env_api_keys['anthropic'])
 
 # Custom CSS
 custom_css = """
@@ -947,15 +1016,15 @@ with gr.Blocks(css=custom_css) as demo:
             
         with gr.Tabs():
             with gr.TabItem("OpenAI"):
-                openai_token = gr.Textbox(label="OpenAI API Key", type="password")
+                openai_token = gr.Textbox(label="OpenAI API Key", type="password", value=env_api_keys['openai'])
                 openai_token.change(fn=register_openai_token, inputs=[openai_token])
             
             with gr.TabItem("Gemini"):
-                gemini_token = gr.Textbox(label="Gemini API Key", type="password")
+                gemini_token = gr.Textbox(label="Gemini API Key", type="password", value=env_api_keys['gemini'])
                 gemini_token.change(fn=register_gemini_token, inputs=[gemini_token])
             
             with gr.TabItem("Anthropic"):
-                anthropic_token = gr.Textbox(label="Anthropic API Key", type="password")
+                anthropic_token = gr.Textbox(label="Anthropic API Key", type="password", value=env_api_keys['anthropic'])
                 anthropic_token.change(fn=register_anthropic_token, inputs=[anthropic_token])
         
         subject = gr.Radio(
@@ -982,9 +1051,9 @@ with gr.Blocks(css=custom_css) as demo:
             use_anthropic = gr.Checkbox(label="Use Claude", value=False)
         
         with gr.Accordion("Advanced Settings", open=False):
-            openai_model = gr.Dropdown(["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini"], value="gpt-4", label="OpenAI Model")
-            gemini_model = gr.Dropdown(["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"], value="gemini-2.0-flash", label="Gemini Model")
-            anthropic_model = gr.Dropdown(["claude-3-haiku-20240307", "claude-3-sonnet-20240229", "claude-3-opus-20240229", "claude-3.5-sonnet-20240620"], value="claude-3-sonnet-20240229", label="Claude Model")
+            openai_model = gr.Dropdown(["gpt-3.5-turbo-16k", "gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-4.1"], value="gpt-4.1", label="OpenAI Model")
+            gemini_model = gr.Dropdown(["gemini-1.5-pro", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-flash-thinking", "gemini-2.5-pro"], value="gemini-2.5-flash", label="Gemini Model")
+            anthropic_model = gr.Dropdown(["claude-3-haiku-20240307", "claude-3-sonnet-20240229", "claude-3-opus-20240229", "claude-3.5-sonnet-20240620", "claude-sonnet-3-7-20250219", "claude-sonnet-4-20250514"], value="claude-sonnet-4-20250514", label="Claude Model")
             
             # Always include specialized analysis by default
             special_analysis = gr.Checkbox(label="Include specialized analysis for research topics", value=True)
@@ -1090,12 +1159,28 @@ with gr.Blocks(css=custom_css) as demo:
         outputs=sample_output
     )
     
-    # Register API keys
+    # Register API keys on change
     openai_token.change(fn=register_openai_token, inputs=[openai_token])
     gemini_token.change(fn=register_gemini_token, inputs=[gemini_token])
     anthropic_token.change(fn=register_anthropic_token, inputs=[anthropic_token])
     
+    # Note: API keys from .env are automatically populated in the text fields above
+    # They will be registered when first used or when the user modifies them
+    print("API keys loaded from .env file (if present) and populated in UI")
+    if env_api_keys['openai']:
+        print("OpenAI API key found in .env")
+    if env_api_keys['gemini']:  
+        print("Gemini API key found in .env")
+    if env_api_keys['anthropic']:
+        print("Anthropic API key found in .env")
+    
     # Only allow updates when the button is clicked or interest is submitted directly
     interest.submit(fn=sample, inputs=all_inputs, outputs=sample_output)
+
+print("=" * 50)
+print("ArxivDigest-extra is starting up...")
+print("The web interface will open in your browser shortly")
+print("API keys from .env file have been loaded")
+print("=" * 50)
 
 demo.launch(show_api=False)

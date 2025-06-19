@@ -553,14 +553,14 @@ def generate_relevance_score(
                 content = crawl_html_version(html_link)
                 if content and len(content) > 100 and "Error accessing HTML" not in content:
                     paper["content"] = content
-                    print(f"✅ Successfully extracted {len(content)} characters of content")
+                    print(f"Successfully extracted {len(content)} characters of content")
                 else:
                     # If HTML version fails, use the abstract + more details
                     paper["content"] = f"{paper.get('abstract', '')} {paper.get('title', '')}"
-                    print(f"⚠️ Failed to extract content, using abstract instead. Error: {content[:100]}...")
+                    print(f"Warning: Failed to extract content, using abstract instead. Error: {content[:100]}...")
                 time.sleep(3)
             else:
-                print(f"⚠️ Couldn't parse paper ID from URL: {main_page}")
+                print(f"Warning: Couldn't parse paper ID from URL: {main_page}")
                 paper["content"] = paper.get("abstract", "No content available")
                 
         except Exception as e:

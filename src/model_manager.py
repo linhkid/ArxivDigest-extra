@@ -45,12 +45,14 @@ class ModelManager:
             return False
 
         try:
-            openai.api_key = api_key
-            # Test API connection
-            models = openai.Model.list()
+            # Create OpenAI client with new API
+            self.openai_client = openai.OpenAI(api_key=api_key)
+            
+            # Test API connection by listing models
+            models = self.openai_client.models.list()
             self.providers[ModelProvider.OPENAI] = True
             self.available_models[ModelProvider.OPENAI] = [model.id for model in models.data]
-            logger.info(f"Successfully connected to OpenAI API. Available models: {self.available_models[ModelProvider.OPENAI]}")
+            logger.info(f"Successfully connected to OpenAI API. Available models: {len(self.available_models[ModelProvider.OPENAI])} models found")
             return True
         except Exception as e:
             logger.error(f"Failed to setup OpenAI API: {e}")
@@ -144,8 +146,8 @@ class ModelManager:
         # Default model names if not specified
         default_models = {
             ModelProvider.OPENAI: "gpt-3.5-turbo-16k",
-            ModelProvider.GEMINI: "gemini-1.5-flash",
-            ModelProvider.ANTHROPIC: "claude-3.5-sonnet-20240620"
+            ModelProvider.GEMINI: "gemini-2.5-flash",
+            ModelProvider.ANTHROPIC: "claude-sonnet-4-20250514"
         }
         
         # Use default models if not specified
@@ -248,8 +250,8 @@ class ModelManager:
             # Use more powerful models for specialized analysis
             default_models = {
                 ModelProvider.OPENAI: "gpt-4o",
-                ModelProvider.GEMINI: "gemini-2.0-flash",
-                ModelProvider.ANTHROPIC: "claude-3.5-sonnet-20240620"
+                ModelProvider.GEMINI: "gemini-2.5-pro",
+                ModelProvider.ANTHROPIC: "claude-sonnet-4-20250514"
             }
             model_name = default_models.get(provider)
             
@@ -263,7 +265,7 @@ class ModelManager:
         # Process based on provider
         if provider == ModelProvider.OPENAI:
             try:
-                response = openai.ChatCompletion.create(
+                response = self.openai_client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {"role": "system", "content": "You are a specialist in mechanistic interpretability and AI safety."},
@@ -371,9 +373,9 @@ class ModelManager:
         if not model_name:
             # Use appropriate models for design analysis
             default_models = {
-                ModelProvider.OPENAI: "gpt-4o",
-                ModelProvider.GEMINI: "gemini-2.0-flash",
-                ModelProvider.ANTHROPIC: "claude-3.5-sonnet-20240620"
+                ModelProvider.OPENAI: "gpt-4.1",
+                ModelProvider.GEMINI: "gemini-2.5-pro",
+                ModelProvider.ANTHROPIC: "claude-sonnet-4-20250514"
             }
             model_name = default_models.get(provider)
             
@@ -389,7 +391,7 @@ class ModelManager:
             analysis = None
             
             if provider == ModelProvider.OPENAI:
-                response = openai.ChatCompletion.create(
+                response = self.openai_client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {"role": "system", "content": "You are a specialist in AI for design automation."},

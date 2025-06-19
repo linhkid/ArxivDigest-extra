@@ -9,7 +9,7 @@ categories: ["Artificial Intelligence", "Computation and Language", "Machine Lea
 # will have their papers filtered out.
 #
 # Must be within 1-10
-threshold: 2
+threshold: 6
 
 # A natural language statement that the large language model will use to judge which papers are relevant 
 #
